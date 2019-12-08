@@ -13,6 +13,8 @@ def send_welcome(message):
     bot.send_message(message.from_user.id, "В кого проблеми? Давайте розбиратися")
 
 
+
+
 @bot.message_handler(content_types=['text'])
 def get_text_messages(message):
     if message.text == "Привіт":
@@ -20,6 +22,11 @@ def get_text_messages(message):
     else:
         bot.send_message(message.from_user.id, "0______________0. Напиши /help.")
 
+@bot.message_handler(commands=['new'])
+def get_text_messages(message):
+    ask_new_debt(message.chat.id, message.from_user.id)
+
+def new_debt
 
 # (func=lambda call: config.state == 'bidding')
 
