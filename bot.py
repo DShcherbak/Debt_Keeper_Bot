@@ -26,7 +26,24 @@ def get_text_messages(message):
 def get_text_messages(message):
     ask_new_debt(message.chat.id, message.from_user.id)
 
-def new_debt
+def new_debt(group_id, user_id):
+    in_the_debt = []
+    
+
+def add_person_to_debt(group_id, user_id):
+    str_group = str(group_id)
+    keyboard = telebot.types.InlineKeyboardMarkup()
+    for i in range(0
+        key_pos[i] = telebot.types.InlineKeyboardButton(text='Додати новий персональний борг', callback_data=str_group + 'r')
+    key_pas = 
+    keyboard.add(key_raz)
+    keyboard.add(key_pas)
+    keyboard.add(key_m)
+    question = "Хтось знову заборгував?)"
+    bot.send_message(user_id, text=question, reply_markup=keyboard)
+
+
+    
 
 # (func=lambda call: config.state == 'bidding')
 
