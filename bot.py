@@ -1,8 +1,8 @@
 import telebot
 import config
+from debt import Debt
 
 bot = telebot.TeleBot(config.Token);
-current_group = []
 payers = []
 debtors = []
 debt_id = 0
@@ -35,7 +35,6 @@ def new_user_welcome(message):
 def get_name(message):
     user_id = message.from_user.id
     bot.send_message(user_id, 'Приємно познайомитися, ' + message.text + '!')
-    current_group.append(user_id)
     group_id = config.state[8:]
     if group_id not in config.debt_groups:
         config.debt_groups[group_id] = []
@@ -80,15 +79,19 @@ def add_new_debt(group_id, user_id):
     global debt_id
     new_id = debt_id
     debt_id += 1
+    new_debt = Debt()
+    if group_id in config.current_debt_id:
+        config.depts[group_id].append(new_debt)
+        config.current_debt_id[group_id] += 1
+    else:
+        config.depts.update((group_id, [new_debt]))
+        config.current_debt_id.update((group_id, 1))
     get_payer(group_id, user_id, new_id)
-    # new_person_to_debt(user_id, new_id)
-    pass
 
 
 def get_payer(group_id, user_id, current_debt_id):
     bot.send_message(user_id, text='Хто купляв?')
     config.state = 'payer' + str(group_id)
-    pass
 
 
 @bot.message_handler(func=lambda call: config.state[:5] == 'payer', content_types=['text'])
@@ -96,7 +99,20 @@ def get_text_messages(message):
     group_id = config.state[5:]
     if message.text in config.id_lib[group_id]:
         bot.send_message(message.from_user.id, "OK")
-        config.
+        config.state = 'debtors'
+        bot.send_message(message.from_user.id, text='Хто купляв?')
+    else:
+        bot.send_message(message.from_user.id, "Ви вказали невірне ім'я, спробуйте ще раз")
+
+
+@bot.message_handler(func=lambda call: config.state[:7] == 'debtors', content_types=['text'])
+def get_text_messages(message):
+    group_id = config.state[7:]
+    debtor = message.text
+    if debtor in config.id_lib[group_id]:
+        #
+        bot.send_message(message.from_user.id, "OK, ще хтось?")
+
     else:
         bot.send_message(message.from_user.id, "Ви вказали невірне ім'я, спробуйте ще раз")
 
@@ -110,7 +126,7 @@ def get_text_messages(message):
 
 
 @bot.callback_query_handler(func=lambda call: config.state == 'debt')
-def new_debt(call):
+def register_new_debt(call):
     if call.data[-1] == 'c':
         return
     done = False
@@ -138,8 +154,8 @@ def new_person_to_debt(user_id, current_debt_id, in_the_debt=None):
     keyboard = telebot.types.InlineKeyboardMarkup()
     str_group = str(current_debt_id) + str((i + ' ') for i in in_the_debt)
     key_pos = []
-    for i in current_group:
-        if not in_the_debt:
+    for i in config.names_lib.values():
+        if i not in in_the_debt:
             key_pos.append(telebot.types.InlineKeyboardButton(text=i.id, callback_data=str_group + str(i)))
             keyboard.add(key_pos[i])
     key_pas = telebot.types.InlineKeyboardButton(text='Cancel', callback_data=str_group + 'c')
