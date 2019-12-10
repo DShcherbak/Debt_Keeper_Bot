@@ -6,4 +6,4 @@ debt_groups = {}
 id_lib = {}
 names_lib = {}
 current_debt_id = {}
-depts = {}
+debts = {}

@@ -13,6 +13,7 @@ def send_welcome(message):
     config.state = 'new debt'
     bot.send_message(message.chat.id, text='Раджу всім додатися в список юзерів, щоб я міг надавати вам свої послуги.')
     bot.send_message(message.chat.id, text='Для цього напишіть команду /add та дотримуйтеся інструкцій.')
+    config.debt_groups.update([(message.chat.id, [])])
 
 
 @bot.message_handler(commands=['help'])
@@ -22,7 +23,7 @@ def send_welcome(message):
 
 @bot.message_handler(commands=['add'])
 def new_user_welcome(message):
-    if message.from_user.id in current_group:
+    if message.from_user.id in config.debt_groups[message.chat.id]:
         bot.send_message(message.chat.id, 'Я вже вас знаю, ' +
                          config.names_lib[str(message.chat.id)][message.from_user.id])
         bot.send_message(message.chat.id, 'Якщо бажаєте змінити свій нік, напишіть /rename')
@@ -81,11 +82,11 @@ def add_new_debt(group_id, user_id):
     debt_id += 1
     new_debt = Debt()
     if group_id in config.current_debt_id:
-        config.depts[group_id].append(new_debt)
+        config.debts[group_id].append(new_debt)
         config.current_debt_id[group_id] += 1
     else:
-        config.depts.update((group_id, [new_debt]))
-        config.current_debt_id.update((group_id, 1))
+        config.debts.update([(group_id, [new_debt])])
+        config.current_debt_id.update([(group_id, 1)])
     get_payer(group_id, user_id, new_id)
 
 
@@ -99,8 +100,9 @@ def get_text_messages(message):
     group_id = config.state[5:]
     if message.text in config.id_lib[group_id]:
         bot.send_message(message.from_user.id, "OK")
-        config.state = 'debtors'
+        config.state = 'debtors' + str(group_id)
         bot.send_message(message.from_user.id, text='Хто купляв?')
+        bot.send_message(message.from_user.id, "(напишіть '/all' щоб додати всіх з чату)")
     else:
         bot.send_message(message.from_user.id, "Ви вказали невірне ім'я, спробуйте ще раз")
 
@@ -109,12 +111,57 @@ def get_text_messages(message):
 def get_text_messages(message):
     group_id = config.state[7:]
     debtor = message.text
-    if debtor in config.id_lib[group_id]:
-        #
-        bot.send_message(message.from_user.id, "OK, ще хтось?")
+    cur_debt_id = config.current_debt_id[group_id]-1
+    if message.text == '/cancel':
+        config.debts[group_id].pop_back()
+        config.current_debt_id[group_id] -= 1
+        config.state = ''
+        return
+    if config.debts[group_id][cur_debt_id].debtors == [] and message.text == '/break':
+        bot.send_message(message.from_user.id, "Має бути принаймні один боржник.")
+        bot.send_message(message.from_user.id, "Введіть ім'я щоб продовдити або '/cancel' для скасування")
+        return
+    if message.text == 'all':
+        cur_debt_id = config.current_debt_id[group_id]
+        for i in config.debt_groups[group_id]:
+            if i != config.debts[cur_debt_id].payer and i not in config.debts[cur_debt_id].debtors:
+                config.debts[cur_debt_id].debtors.append(i)
 
+    if message.text == '/break' or message.text == 'all':
+        bot.send_message(message.from_user.id, "OK")
+        config.state = 'sum' + str(group_id)
+        bot.send_message(message.from_user.id, "Яка сума боргу?")
+
+    if debtor in config.id_lib[group_id]:
+        if debtor in config.debts[group_id][cur_debt_id].debtors:
+            bot.send_message(message.from_user.id, "Цього боржника вже згадували, модливо ще хтось?")
+        else:
+            bot.send_message(message.from_user.id,  "OK, ще хтось? (напишіть '/break' щоб закінчити перерахунок)")
+            config.debts[group_id][cur_debt_id].debtors.append(debtor)
     else:
         bot.send_message(message.from_user.id, "Ви вказали невірне ім'я, спробуйте ще раз")
+
+
+@bot.message_handler(func=lambda call: config.state[:3] == 'sum', content_types=['text'])
+def get_sum(message):
+    if not message.text.isDigit():
+        bot.send_message(message.from_user.id, "Необхідно ввести додатнє число, спробуйте ще раз")
+        return
+    debt_sum = int(message.text)
+    if debt_sum <= 0:
+        bot.send_message(message.from_user.id, "Необхідно ввести додатнє число, спробуйте ще раз")
+        return
+    group_id = config.state[7:]
+    cur_debt_id = config.current_debt_id[group_id]-1
+    config.debts[group_id][cur_debt_id].sum = debt_sum
+    bot.send_message(message.from_user.id, "OK")
+
+    config.state = 'confirm'
+
+
+@bot.message_handler(func=lambda call: config.state[:3] == 'confirm', content_types=['text'])
+def get_confirmation(message):
+    bot.send_message(message.from_user.id, "Все вірно?")
 
 
 @bot.message_handler(content_types=['text'])
