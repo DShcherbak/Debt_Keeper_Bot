@@ -4,10 +4,12 @@ json_database = "data_file.json"
 users_database = "reachable_users.json"
 
 
-def save_to_database(group):
-    groups = group.encode_to_JSON()
+def save_to_database(groups):
+    encoded_groups = {}
+    for group_id in groups:
+        encoded_groups.update([(group_id, groups[group_id].encode_to_json())])
     with open(json_database, "w") as write_file:
-        json.dump(groups, write_file)
+        json.dump(encoded_groups, write_file)
 
 
 def read_from_database():
