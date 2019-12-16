@@ -21,7 +21,6 @@ class Group:
     id = ""
     id_lib = {}
     names_lib = {}
-    current_debt_id = 0
     debts = []
 
     def add_user(self, user_id, name='/unknown'):
@@ -35,15 +34,13 @@ class Group:
         encoded_debts = []
         for x in self.debts:
             encoded_debts.append(x.encode_to_json())
-        return {"id": {0: self.id}, "id_lib": self.id_lib, "names_lib": dict(self.names_lib),
-                "debt_id": {0: self.current_debt_id}, "debts": {0: encoded_debts}}
+        return {"id": {0: self.id}, "id_lib": self.id_lib, "names_lib": dict(self.names_lib),  "debts": {0: encoded_debts}}
 
     def decode_from_json(self, json_group):
         self.id = json_group["id"]["0"]
         self.id_lib = json_group["id_lib"]
 
         self.names_lib = json_group["names_lib"]
-        self.current_debt_id = json_group["debt_id"]["0"]
         encoded_debts = json_group["debts"]["0"]
         self.debts = []
         for x in encoded_debts:
@@ -56,7 +53,6 @@ class Group:
         self.id = another_group.id
         self.id_lib = dict(another_group.id_lib)
         self.names_lib = dict(another_group.names_lib)
-        self.current_debt_id = another_group.current_debt_id
         self.debts = list(another_group.debts)
 
 

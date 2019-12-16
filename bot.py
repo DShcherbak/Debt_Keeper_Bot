@@ -8,9 +8,8 @@ reachable_users = []
 groups = {}
 incoming_debts = {}
 state = {}
+previous_solution = {}
 
-
-# TODO: need to figure out a way to approve new debt-system and to cancel-out debts
 
 
 @bot.message_handler(func=lambda message: message.chat.type == 'private', commands=['start'])
@@ -26,6 +25,34 @@ def personal_help(message):
     text = "Я не так багато вмію в нашому з вами маленькому чаті. "
     text += "Але мене можна додати в групу, і там можна буде додавати борги між користувачами,"
     text += " а я буду їх запам'ятовувати."
+    text += "А тут доступні команди /start, /help, /cancel"
+    text += "/cancel - відміна будь-якої поочної операції"
+    bot.send_message(message.from_user.id, text)
+
+
+def check_user_state(message, st):
+    return state[str(message.from_user.id)][:len(st)] == st
+
+
+def get_group_id(current_state):
+    if current_state[0].isdigit():
+        return current_state
+    if current_state[:8] == 'get name':
+        return current_state[8:]
+    if current_state[:3] == 'new':
+        return current_state[3:]
+    if current_state[:5] == 'payer':
+        return current_state[5:]
+    if current_state[:7] == 'debtors':
+        return current_state[7:]
+    if current_state[:3] == 'sum':
+        return current_state[3:]
+
+
+@bot.message_handler(func=lambda message: message.chat.type == 'private', commands=['cancel'])
+def personal_help(message):
+    text = "Відміна"
+
     bot.send_message(message.from_user.id, text)
 
 
@@ -67,6 +94,7 @@ def send_welcome(message):
         group.id = str(message.chat.id)
         groups.update([(group_id, group)])
         save_to_database(groups)
+    previous_solution.update([(str(message.chat.id), [(-1, -1, -1)])])
     state.update([(str(message.from_user.id), str(message.chat.id))])
 
 
@@ -76,18 +104,14 @@ def send_help(message):
     text += "/add - додати нового користувача до групи\n"
     text += "/debt - додати новий борг\n"
     text += "/list - вивести список користувачів\n"
-    text += "/all - вивести список боргів"
+    text += "/all - вивести список боргів\n"
+    text += "/resolve - розрахувати найпростіший варіант повернення заборгованостей\n"
+    text += "/approve - прийняти запропонований мною варіант як поточну"
+    text += " (команда /approve може бути виконана тільки після виконання операції /resolve."
+    text += "Також прохання бути обачними, адже виконання команди призводить до втрати"
+    text += " історії попередніх заборгованостей, залишаються лише суми, які учасники мають повернути."
+    text += "Раджу порадитись з іншими учасниками перш ніж застосовувати цю команду)"
     bot.send_message(message.chat.id, text)
-
-
-def correct_group_message(message, correct_state, equal=True):
-    group_id = message.chat.id
-    if equal:
-        return (message.chat.type == 'group') and (str(message.from_user.id) in reachable_users) and (
-                groups[group_id].state[str(message.from_user.id)] == correct_state)
-    else:
-        return (message.chat.type == 'group') and (str(message.from_user.id) in reachable_users) and (
-                groups[group_id].state[str(message.from_user.id)] != correct_state)
 
 
 @bot.message_handler(func=lambda message: message.chat.type == 'group', commands=['add'])
@@ -110,13 +134,6 @@ def new_user_welcome(message):
         state[user_id] = 'get name' + str(message.chat.id)
 
 
-'''
-@bot.message_handler(func=lambda message: correct_group_message(message, '', False), commands=['add'])
-def busy(message):
-    bot.send_message(message.chat.id, 'Вибачте, я зараз спілкуюся з іншим користувачем, спробуйте пізніше')
-'''
-
-
 @bot.message_handler(func=lambda message: message.chat.type == 'group', commands=['list'])
 def listing(message):
     print_all_people(str(message.chat.id))
@@ -129,6 +146,7 @@ def listing(message):
 
 @bot.message_handler(func=lambda message: message.chat.type == 'group', commands=['resolve'])
 def resolve(message):
+    global previous_solution
     group_id = str(message.chat.id)
     group = groups[group_id]
     debt_array = group.debts
@@ -198,7 +216,7 @@ def resolve(message):
             # plus_money[n][0] -= minus_money[m][0]
             del minus_money[m]
             m -= 1
-            if plus_money[n][0] == 0:
+            if plus_money[n][0] < 0.25:
                 del plus_money[n]
                 n -= 1
         if n > 0 and plus_money[n - 1][0] > minus_money[m][0]:
@@ -213,12 +231,34 @@ def resolve(message):
     bot.send_message(group.id, "Here's my solution")
     for s in solution:
         bot.send_message(group.id, group.names_lib[s[0]] + " -> " + group.names_lib[s[1]] + " : " + str(s[2]))
-
+    #previous_solution[group_id] = []
+    previous_solution[group_id] = list(solution)
+    if not solution:
+        bot.send_message(group.id, "Все чисто, боргів не лишилось!")
     print(solution)
 
 
-def check_user_state(message, st):
-    return state[str(message.from_user.id)][:len(st)] == st
+@bot.message_handler(func=lambda message: message.chat.type == 'group', commands=['approve'])
+def approval(message):
+    global previous_solution
+    group_id = str(message.chat.id)
+    if (not previous_solution[group_id] == []) and previous_solution[group_id][0][0] == -1:
+        bot.send_message(group_id, "Спершу необхідно викнати команду /resolve")
+        return
+    bot.send_message(group_id, "OK, міняю список боргів ")
+    group = groups[group_id]
+    group.debts = []
+    for d in previous_solution[group_id]:
+        print("blablabal")
+        print(d)
+        new_debt = Debt()
+        new_debt. payer = d[1]
+        new_debt.debtors = [d[0]]
+        new_debt.sum = d[2]
+        groups[group_id].debts.append(new_debt)
+    previous_solution = [(-1, -1, -1)]
+    save_to_database(groups)
+    print_all_debts(group_id)
 
 
 @bot.message_handler(func=lambda message: (str(message.from_user.id) in reachable_users) and check_user_state(message, 'get name'))
@@ -248,8 +288,10 @@ def get_command(message):
     keyboard = telebot.types.InlineKeyboardMarkup()
     key_new_debt = telebot.types.InlineKeyboardButton(text='Додати новий борг', callback_data='new_debt')
     key_list = telebot.types.InlineKeyboardButton(text='Показати список боргів', callback_data='list_debts')
+    key_people = telebot.types.InlineKeyboardButton(text='Показати список людей', callback_data='list_people')
     keyboard.add(key_new_debt)
     keyboard.add(key_list)
+    keyboard.add(key_people)
     question = "Хтось знову заборгував?)"
     bot.send_message(user_id, text=question, reply_markup=keyboard)
 
@@ -261,8 +303,12 @@ def form(call):
     group_id = state[user_id][3:]
     if call.data == 'new_debt':
         add_new_debt(user_id, group_id)
+    elif call.data == 'list_debts':
+        print_all_debts(group_id, user_id)
+        state[user_id] = group_id
     else:
-        print_all_debts(group_id)
+        print_all_people(group_id, user_id)
+        state[user_id] = group_id
 
 
 def add_new_debt(user_id, group_id):
@@ -284,10 +330,8 @@ def get_text_messages(message):
     if message.text in group.id_lib:
         bot.send_message(user_id, "OK")
         incoming_debts[user_id][1].payer = group.id_lib[message.text]
-        #group.debts[curr_debt_id].payer = group.id_lib[message.text]
         state[user_id] = 'debtors' + group_id
         incoming_debts[user_id][1].debtors = []
-        #group.debts[curr_debt_id].debtors = []
         bot.send_message(user_id, text='За кого платили?')
         bot.send_message(user_id, "(напишіть '/every' щоб додати всіх з чату)")
     else:
@@ -319,7 +363,7 @@ def get_debtors(message):
         bot.send_message(user_id, "OK")
         state[user_id] = 'sum' + group_id
         bot.send_message(user_id, "Яка сума боргу?")
-    if debtor in group.id_lib:
+    elif debtor in group.id_lib:
         if debtor in incoming_debts[user_id][1].debtors:
             bot.send_message(user_id, "Цього боржника вже згадували, модливо ще хтось?")
         else:
@@ -350,29 +394,30 @@ def get_sum(message):
         return
     incoming_debts[user_id][1].sum = debt_sum
     groups[group_id].debts.append(incoming_debts[user_id][1])
-    cur_debt_id = groups[group_id].current_debt_id
-    groups[group_id].current_debt_id += 1
     bot.send_message(user_id, "OK")
     bot.send_message(group_id, "Вітаю з новою покупкою!")
-    print(debt_to_text(groups[group_id].debts[cur_debt_id], group_id))
     save_to_database(groups)
     state[user_id] = group_id
 
 
-def print_all_debts(group_id):
+def print_all_debts(group_id, where_to=""):
+    if where_to == "":
+        where_to = group_id
     group = groups[group_id]
     text = 'Поточні борги:\n'
     for i in group.debts:
         text += debt_to_text(i, group_id) + '\n'
-    bot.send_message(group_id, text)
+    bot.send_message(where_to, text)
 
 
-def print_all_people(group_id):
+def print_all_people(group_id, where_to=""):
+    if where_to == "":
+        where_to = group_id
     group = groups[group_id]
     text = 'Учасники групи:\n'
     for i in group.names_lib:
         text += group.names_lib[i] + '\n'
-    bot.send_message(group.id, text)
+    bot.send_message(where_to, text)
 
 
 def debt_to_text(debt, group_id):
