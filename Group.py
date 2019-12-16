@@ -12,6 +12,11 @@ class Debt:
         self.sum = json_group["sum"]["0"]
 
 
+class IncomingDebt:
+    group_id = -1
+    debt = Debt()
+
+
 class Group:
     id = ""
     id_lib = {}
@@ -46,9 +51,13 @@ class Group:
             y.decode_from_json(x)
             self.debts.append(y)
 
+
     def renew(self, another_group):
         self.id = another_group.id
-        self.id_lib = another_group.id_lib
-        self.names_lib = another_group.names_lib
+        self.id_lib = dict(another_group.id_lib)
+        self.names_lib = dict(another_group.names_lib)
         self.current_debt_id = another_group.current_debt_id
-        self.debts = another_group.debts
+        self.debts = list(another_group.debts)
+
+
+
