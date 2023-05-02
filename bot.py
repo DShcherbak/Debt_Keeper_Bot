@@ -1,15 +1,39 @@
+import csv
 import telebot
-from database import (remember_users, read_from_database,
-                      get_users, save_to_database)
+from parsing.database import (read_from_database, save_to_database)
 from lang import load_lang, lang, LangCode
-from Group import Debt, Group
-from state.state import *
+from state.group import Group
+from state.state import State
+from state.debt import Debt
+from state.user import User, UserState
+from secret.secret import secret
 from utils import *
 
-
-bot = telebot.TeleBot('1054698181:AAEmAqgJ_pc6P7Hbd6XWN2Bb-MJzxS4os1U')
-
+print(secret)
+bot = telebot.TeleBot(secret)
 state = State()
+
+
+def check_user_state(user_state):
+    return lambda message: state.is_reachable(message.from_user.id) and state.check_user_state(message.from_user.id, user_state)
+
+
+def parse_user(message, group_id):
+    name = message.text
+    id = state.get_id(group_id, name)
+    return (name, id)
+
+
+def parse_group_message(message):
+    (user_id, group_id) = parse_message(message)
+    user = state.groups[group_id].users[user_id] if state.knows_group(group_id) else User()
+    return (user_id, group_id, user)
+
+def unknown_group(group):
+    if not state.knows_group(group):
+        bot.send_message(group, lang(LangCode.StartFirst))
+        return True 
+    return False
 
 
 #######################
@@ -21,7 +45,7 @@ state = State()
 
 @bot.message_handler(func=is_private, commands=['start'])
 def send_hello(message):
-    user_id = message.from_user.id
+    user_id = str(message.from_user.id)
     bot.send_message(user_id, lang(LangCode.Hello))
     bot.send_message(user_id, lang(LangCode.Greet))
     state.reach_user(user_id)
@@ -51,7 +75,7 @@ def send_welcome(message):
 
     if group_id in state.groups:
         bot.send_message(group_id, lang(LangCode.WelcomeBack))
-        list_people(group_id)
+        list_people(message)
     else:
         bot.send_message(group_id, lang(LangCode.GroupGreet))
         state.add_group(Group(group_id))
@@ -65,22 +89,30 @@ def send_help(message):
 
 @bot.message_handler(func=is_group, commands=['people'])
 def list_people(message):
+    group_id = str(message.chat.id)
+    if unknown_group(group_id):
+        return
     text = lang(LangCode.UserList)
-    for user in state.groups[str(message.chat.id)].users:
+    for user_id in state.groups[group_id].users:
+        user = state.groups[group_id].users[user_id]
         text += user.name + '\n'
     bot.send_message(message.chat.id, text)
 
 
 @bot.message_handler(func=is_group, commands=['debts'])
 def list_debts(message):
+    if unknown_group(str(message.chat.id)):
+        return
     text = lang(LangCode.TransactionList)
-    debt_list = state.get_all_debts()
+    debt_list = pretty_debts(state.get_all_debts())
     bot.send_message(message.chat.id, text + debt_list)
 
 
 @bot.message_handler(func=is_group, commands=['resolve'])
 def resolve(message):
     group_id = str(message.chat.id)
+    if unknown_group(group_id):
+        return
     result = state.resolve(group_id)
     if len(result) == 0:
         bot.send_message(group_id, lang(LangCode.ResolveSuccess))
@@ -95,6 +127,8 @@ def resolve(message):
 @bot.message_handler(func=is_group, commands=['settle'])
 def settle(message):
     group_id = str(message.chat.id)
+    if unknown_group(group_id):
+        return
     state.settle(group_id)
     save_to_database(state)
     bot.send_message(group_id, lang(LangCode.AllClear))
@@ -110,9 +144,11 @@ def settle(message):
 @bot.message_handler(func=is_group, commands=['add'])
 def new_user_welcome(message):
     (user_id, group_id) = parse_message(message)
+    
+    if unknown_group(group_id):
+        return
 
-    if not state.is_reachable(user_id)
-        print(user_id, " not reachable ")
+    if not state.is_reachable(user_id):
         bot.send_message(group_id, lang(LangCode.CantWriteFirst))
         return
     
@@ -123,7 +159,7 @@ def new_user_welcome(message):
                                             user_name))
     else:
         state.add_user(group_id, user_id, "")
-        bot.send_message(user_id, lang(LangCode.GetName))
+        bot.send_message(group_id, lang(LangCode.GetName))
     state.set_user_state(group_id, user_id, UserState.GetName)
 
 
@@ -131,6 +167,8 @@ def new_user_welcome(message):
 @bot.message_handler(func=check_user_state(UserState.GetName))
 def get_name(message):
     (user_id, group_id) = parse_message(message)
+    if unknown_group(str(group_id)):
+        return
     user_name = message.text
     bot.send_message(user_id, format(lang(LangCode.NiceToMeet), user_name))
     state.groups[group_id].users[user_id].name = user_name
@@ -147,7 +185,10 @@ def get_name(message):
 @bot.message_handler(commands=['debt'])
 def get_command(message):
     (user_id, group_id, user) = parse_group_message(message)
-    user.set_state(UserState.Debt)
+    user.set_state(UserState.NewDebt)
+
+    if unknown_group(group_id):
+        return
 
     keyboard = telebot.types.InlineKeyboardMarkup()
     key_new_debt = telebot.types.InlineKeyboardButton(text=lang(LangCode.NewDebt), callback_data='NewDebt')
@@ -158,9 +199,11 @@ def get_command(message):
     bot.send_message(group_id, text=lang(LangCode.DebtList), reply_markup=keyboard)
 
 
-@bot.callback_query_handler(func=check_user_state(UserState.Debt))
+@bot.callback_query_handler(func=check_user_state(UserState.NewDebt))
 def form(call):
     (user_id, group_id, user) = parse_group_message(call)
+    if unknown_group(str(group_id)):
+        return
     if call.data == 'NewDebt':
         bot.send_message(user_id, text=lang(LangCode.WhoPayed))
         user.set_state(UserState.Payer)
@@ -173,8 +216,9 @@ def form(call):
 
 @bot.message_handler(func=check_user_state(UserState.Payer), content_types=['text'])
 def get_text_messages(message):
-
     (user_id, group_id, user) = parse_group_message(message)
+    if unknown_group(str(group_id)):
+        return
     (name, payer_id) = parse_user(message, group_id)
 
     if message.text == '/cancel':
@@ -191,11 +235,11 @@ def get_text_messages(message):
     bot.send_message(user_id, text=lang(LangCode.Debtors))
     
 
-
 @bot.message_handler(func=check_user_state(UserState.Debtors), content_types=['text'])
 def get_debtors(message):
-
     (user_id, group_id, user) = parse_group_message(message)
+    if unknown_group(str(group_id)):
+        return
     (debtor_name, debtor_id) = parse_user(message, group_id)
 
     if message.text == '/cancel':
@@ -230,7 +274,8 @@ def get_debtors(message):
 @bot.message_handler(func=check_user_state(UserState.Sum), content_types=['text'])
 def get_sum(message):
     (user_id, group_id, user) = parse_group_message(message)
-
+    if unknown_group(str(group_id)):
+        return
     debt_sum = parse_float(message.text)
     if debt_sum <= 0:
         bot.send_message(user_id, lang(LangCode.PositiveNum))
@@ -254,5 +299,7 @@ def get_sum(message):
 
 if __name__ == "__main__":
     load_lang()
-    state = get_state()
+    state = State()
+    state = read_from_database()
+
     bot.polling(none_stop=True, interval=0)

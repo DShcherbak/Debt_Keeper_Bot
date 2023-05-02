@@ -16,6 +16,26 @@ class LangCode(Enum):
     ChangeName = 8
     GetName = 9
     Cancel = 10
+    Solution = 11
+    AllClear= 12
+    NiceToMeet =13
+    ResolveSuccess = 14
+    NewDebt = 15
+    DebtList = 16
+    DebtQuestion = 17
+    UserList = 18
+    TransactionList = 19
+    WhoPayed = 20
+    WrongName = 21
+    Debtors = 22
+    AtLeastOne = 23
+    OK = 24
+    Sum = 25
+    RepeatedName = 26
+    AnyoneElse = 27
+    PositiveNum = 28
+    TransactionAdded = 29
+    StartFirst = 30
 
 
 def lang(code):
@@ -37,5 +57,5 @@ def load_lang():
             for i in range(len(lang_names)):
                 dictionary[lang_names[i]][LangCode(j)] = row[i]
             j += 1
-    print(dictionary)
-    print(dictionary["UKR"])
+    #  print(dictionary)
+    #  print(dictionary["UKR"])

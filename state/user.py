@@ -1,5 +1,5 @@
 from enum import Enum
-from debt import Debt
+from state.debt import Debt
 
 class UserState(Enum):
     Default = 1
