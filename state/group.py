@@ -1,20 +1,5 @@
 from state.user import User
 
-
-class Debt:
-    payer = -1
-    debtors = []
-    sum = 0
-
-    def encode_to_json(self):
-        return {"payer": {0: self.payer}, "debtors": {0 : self.debtors}, "sum": {0 : self.sum}}
-
-    def decode_from_json(self, json_group):
-        self.payer = json_group["payer"]["0"]
-        self.debtors = json_group["debtors"]["0"]
-        self.sum = json_group["sum"]["0"]
-
-
 class Group:
     def __init__(self, id):
         self.id = id
@@ -61,22 +46,3 @@ class Group:
 
     def settle(self):
         self.debts = []
-
-
-    def encode_to_json(self):
-        encoded_debts = []
-        for x in self.debts:
-            encoded_debts.append(x.encode_to_json())
-        return {"id": {0: self.id}, "id_lib": self.users, "names_lib": dict(self.names_lib),  "debts": {0: encoded_debts}}
-
-    def decode_from_json(self, json_group):
-        self.id = json_group["id"]["0"]
-        self.id_lib = json_group["id_lib"]
-
-        self.names_lib = json_group["names_lib"]
-        encoded_debts = json_group["debts"]["0"]
-        self.debts = []
-        for x in encoded_debts:
-            y = Debt()
-            y.decode_from_json(x)
-            self.debts.append(y)
