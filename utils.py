@@ -1,4 +1,4 @@
-from lang import load_lang
+from parsing.lang.lang import load_lang
 from state.state import get_state
 
 

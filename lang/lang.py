@@ -2,7 +2,11 @@ import csv
 from enum import Enum
 
 dictionary = {}
-current_language = "UKR"
+
+class Lang(Enum):
+    UKR = 1
+
+current_language = Lang.UKR
 
 
 class LangCode(Enum):
@@ -47,7 +51,7 @@ def lang_format(code, *args):
 
 
 def load_lang():
-    with open('lang.csv', newline='', encoding='utf-8') as csvfile:
+    with open('lang/lang.csv', newline='', encoding='utf-8') as csvfile:
         spamreader = csv.reader(csvfile, delimiter=',', quotechar='"', lineterminator='\n')
         lang_names = spamreader.__next__()
         for lang_name in lang_names:
@@ -58,4 +62,4 @@ def load_lang():
                 dictionary[lang_names[i]][LangCode(j)] = row[i]
             j += 1
     #  print(dictionary)
-    #  print(dictionary["UKR"])
+    #  print(dictionary[Lang.UKR])
